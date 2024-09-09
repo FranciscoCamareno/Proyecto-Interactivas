@@ -19,10 +19,28 @@ var config = { //objeto config, determina las propiedades del juego
 };
 
 var game = new Phaser.Game(config); //se pasan las variables de config al juego
+var score = 0;
+
+
+function displayScore(x, y, score) {
+    const scoreString = score.toString(); // Convierte el puntaje a una cadena
+    const digits = scoreString.split(''); // Divide la cadena en dígitos individuales
+
+    digits.forEach((digit, index) => {
+        this.add.image(x + index * 18, y, digit); // Coloca cada dígito en pantalla
+    });
+}
+
 
 function preload (){    
+    const scoreNumbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    scoreNumbers.forEach((num, index) => {
+        this.load.image(num, `assets/items/score/score0${index}.png`);
+    });
+
     this.load.image('background', 'assets/background/background01.png');
     this.load.image('platform', 'assets/background/plataforma2.png');
+    this.load.image('coin', 'assets/items/coin.png');
     this.load.spritesheet('character', 'assets/character/character_Walk.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_reverse', 'assets/character/character_Walk_reverse.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_idle', 'assets/character/character_idle.png', {frameWidth : 32, frameHeight : 32});
@@ -38,6 +56,23 @@ function create () {
     //platform
     platforms = this.physics.add.staticGroup(); //crea un grupo de plataformas estaticas
     platforms.create(400, 490, 'platform').setScale(1).refreshBody(); //crea una plataforma en la posición x:400, y:568, escala:1, y la refresca
+
+    //coins
+    coins = this.physics.add.staticGroup();
+    coins.create(350, 400, 'coin').setScale(1).refreshBody();
+    coins.create(250, 300, 'coin').setScale(1).refreshBody();
+    /*
+    coins = this.physics.add.staticGroup({
+        key : 'coin',
+        repeat : 4,
+        setXY : {
+            x : 12,
+            y : 40,
+            stepX : 70
+        },
+        
+    });
+    */
     
     //player
     player = this.physics.add.sprite(50, 380, 'character_idle'); // usa la animación de idle por defecto y crea un personaje en la ubicación x:400, y:568
@@ -92,8 +127,13 @@ function create () {
 
     
     this.physics.add.collider(player, platforms);
+    this.physics.add.overlap(player, coins, collectCoin, null, this);
     cursor = this.input.keyboard.createCursorKeys();
+
+    // Actualiza el puntaje en la pantalla
+    displayScore.call(this, 16, 16, score);
 }
+
 
 let lastDirection = 'right'; //estado inicial de la dirección
 
@@ -131,6 +171,13 @@ function update() {
         } else {
             player.anims.play('jump', true);
         } 
-    } 
+    }
     
+}
+
+//función para detectar colisiones entre el personaje y las monedas
+function collectCoin(player, coin) {
+    coin.disableBody(true, true);
+    score += 5;
+    displayScore.call(this, 16, 16, score); //actualiza el puntaje en la pantalla
 }

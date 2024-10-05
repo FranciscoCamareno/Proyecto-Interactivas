@@ -1,4 +1,3 @@
-//const Phaser = require('phaser'); //carga el motor de desarrollo de juegos Phaser
 
 var config = { //objeto config, determina las propiedades del juego
     type : Phaser.AUTO, //indica que usar para mostar el juego (CANVAS, WebGL, AUTO)
@@ -13,23 +12,32 @@ var config = { //objeto config, determina las propiedades del juego
         default : 'arcade', //tipo de fisica
         arcade : {
             gravity : {y : 300}, //gravedad
-            debug : true
+            debug : false
         }
     }
 };
 
 var game = new Phaser.Game(config); //se pasan las variables de config al juego
 var score = 0;
-
+var scoreImages;
+var bounceActive = false;
+var totalCoins = 5; // Set this to the total number of coins in your level
+var collectedCoins = 0;
+var keyVisible = false;
 
 function displayScore(x, y, score) {
-    const scoreString = score.toString(); // Convierte el puntaje a una cadena
-    const digits = scoreString.split(''); // Divide la cadena en dígitos individuales
+    //elimina los dígitos anteriores
+    scoreImages.clear(true, true);
+
+    const scoreString = score.toString();
+    const digits = scoreString.split('');
 
     digits.forEach((digit, index) => {
-        this.add.image(x + index * 18, y, digit); // Coloca cada dígito en pantalla
+        const scoreImage = this.add.image(x + index * 18, y, digit);
+        scoreImages.add(scoreImage);
     });
 }
+
 
 
 function preload (){    
@@ -44,14 +52,21 @@ function preload (){
     this.load.image('platform03', 'assets/background/platform03.png');
     this.load.image('platform03_2', 'assets/background/platform03_2.png');
     this.load.image('platform04', 'assets/background/platform04.png');
-    this.load.image('coin', 'assets/items/coin.png');
+    this.load.image('cloud', 'assets/background/cloud.png');
+    this.load.image('mushroom01', 'assets/background/mushroom01.png');
+    this.load.image('mushroom02', 'assets/background/mushroom02.png');
+    this.load.image('key', 'assets/items/key.png');
+    this.load.spritesheet('coins', 'assets/items/coin_sprite.png', {frameWidth : 18, frameHeight : 18});
     this.load.spritesheet('character', 'assets/character/character_Walk.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_reverse', 'assets/character/character_Walk_reverse.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_idle', 'assets/character/character_idle.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_idle_reverse', 'assets/character/character_idle_reverse.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_jump', 'assets/character/character_Jump.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('character_jump_reverse', 'assets/character/character_jump_reverse.png', {frameWidth : 32, frameHeight : 32});
+    this.load.spritesheet('character_death', 'assets/character/character_Death.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('enemy', 'assets/enemies/enemy_sprite.png', {frameWidth : 24, frameHeight : 24});
+    this.load.audio('music', ['assets/audio/powerUp.mp3']);
+
 }
 
 function create () {
@@ -60,29 +75,40 @@ function create () {
     
     //platform
     platforms = this.physics.add.staticGroup(); //crea un grupo de plataformas estaticas
-    platforms.create(102, 479, 'platform03').setScale(0.9).refreshBody(); //crea una plataforma en la posición x:400, y:568, escala:1, y la refresca
-    platforms.create(481, 479, 'platform03_2').setScale(0.9).refreshBody();
-    platforms.create(319, 515, 'platform01').setScale(0.9).refreshBody();
-    platforms.create(650, 462, 'platform04').setScale(0.9).refreshBody();
+    platforms.create(102, 479, 'platform03').setScale(0.9).refreshBody().setVisible(false); //crea una plataforma en la posición x:400, y:568, escala:1, y la refresca
+    platforms.create(481, 479, 'platform03_2').setScale(0.9).refreshBody().setVisible(false);
+    platforms.create(319, 515, 'platform01').setScale(0.9).refreshBody().setVisible(false);
+    platforms.create(650, 462, 'platform04').setScale(0.9).refreshBody().setVisible(false);
     [ [237, 497], [401, 497] ].forEach(([x, y]) => 
         platforms.create(x, y, 'platform02').setScale(0.9).refreshBody()
     );
     
+    //mushrooms
+    mushrooms = this.physics.add.staticGroup();
+    mushrooms.create(229, 390, 'mushroom01').setScale(0.9).refreshBody().setVisible(false).setName('bounce');
+    mushrooms.create(319, 444, 'mushroom02').setScale(0.9).refreshBody().setVisible(false).setName('bounce');
+
+    //cloud
+    clouds = this.physics.add.staticGroup();
+    [ [120, 340], [445, 317], [337, 353], [530, 282] ].forEach(([x, y]) =>
+        clouds.create(x, y, 'cloud').setScale(1).refreshBody()
+    );
 
     //coins
     coins = this.physics.add.staticGroup();
-    [ [350, 400], [250, 300] ].forEach(([x, y]) => 
-        coins.create(x, y, 'coin').setScale(1).refreshBody()
+    [ [322, 400], [230, 300], [335, 300], [440, 260], [100, 300] ].forEach(([x, y]) => 
+        coins.create(x, y, 'coins').setScale(1).refreshBody()
     );
     
-    
+    //key
+    key = this.physics.add.staticGroup();
+    keySprite = key.create(767, 400, 'key').setScale(1).refreshBody().setVisible(false);
+
     //player
     player = this.physics.add.sprite(50, 380, 'character_idle'); // usa la animación de idle por defecto y crea un personaje en la ubicación x:400, y:568
     player.setCollideWorldBounds(true); //para que el personaje colisione con el mundo
     player.setBounce(0.2); //para que el personaje rebote en la plataforma
     player.setVelocityX(0);
-    //console.log('Posición inicial:', player.x, player.y);
-    //console.log('Velocidad inicial:', player.body.velocity.x, player.body.velocity.y);
 
     //enemigos
     enemy = this.physics.add.sprite(670, 422, 'enemy');
@@ -133,20 +159,55 @@ function create () {
     });
 
     this.anims.create({
+        key : 'death',
+        frames : this.anims.generateFrameNumbers('character_death', {start : 0, end : 7}),
+        frameRate : 10,
+    });
+
+    this.anims.create({
         key : 'enemy',
         frames : this.anims.generateFrameNumbers('enemy', {start : 0, end : 1}),
         frameRate : 10,
         repeat : -1
     });
 
+    this.anims.create({
+        key : 'coins',
+        frames : this.anims.generateFrameNumbers('coins', {start : 0, end : 1}),
+        frameRate : 5,
+        repeat : -1
+    });
+
     
     this.physics.add.collider(player, platforms);
-    this.physics.add.overlap(player, coins, collectCoin, null, this);
+    //this.physics.add.collider(player, mushrooms);
+    this.physics.add.collider(player, mushrooms, (player, mushroom) => {
+        if (player.body.touching.down && mushroom.name === 'bounce') {
+            player.setVelocityY(-110);
+            bounceActive = true;
+        }
+    });
+    this.physics.add.collider(player, clouds);
     this.physics.add.collider(enemy, platforms);
+    this.physics.add.collider(player, enemy, playerHitEnemy, null, this);
+    this.physics.add.overlap(player, coins, collectCoin, null, this);
+    this.physics.add.overlap(player, key, collectKey, null, this);
+
     cursor = this.input.keyboard.createCursorKeys();
 
-    // Actualiza el puntaje en la pantalla
+    scoreImages = this.add.group();
     displayScore.call(this, 16, 16, score);
+
+    //console.log(this.sound.get('music')); 
+
+    backgroundMusic = this.sound.add('music');
+    this.sound.setVolume(0.4);
+    if (backgroundMusic) {
+        backgroundMusic.setLoop(true);
+        backgroundMusic.play();
+    } else {
+        console.error('No se pudo cargar el archivo de audio');
+    }
 }
 
 
@@ -179,43 +240,72 @@ function update() {
     }
 
     //salto
-    if (cursor.space.isDown && player.body.touching.down) {
+    if (cursor.space.isDown && (player.body.touching.down || bounceActive === true)) {
         player.setVelocityY(-160);  
         if (lastDirection === 'left') {
             player.anims.play('jump_reverse', true);
         } else {
             player.anims.play('jump', true);
-        } 
+        }
+        bounceActive = false; 
     }
 
+    coins.children.iterate(function (coin) {
+        coin.anims.play('coins', true);
+    });
+    
     //enemigos
     enemy.anims.play('enemy', true);
     enemy.update();
+    
 }
 
 //función para detectar colisiones entre el personaje y las monedas
-function collectCoin(player, coin) {
-    coin.disableBody(true, true);
-    score += 5;
-    displayScore.call(this, 16, 16, score); //actualiza el puntaje en la pantalla
+function collectKey(player, key) {
+    if (keyVisible) {
+        key.disableBody(true, true);
+        this.add.text(400, 300, 'You Win!', { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+        player.setVelocity(0, 0);
+        this.physics.pause();
+    }
 }
 
+//función para detectar colisiones entre el personaje y los enemigos
 function moveEnemy(enemy, speed, minX, maxX) {
     enemy.setVelocityX(speed);
     // Función para invertir la dirección cuando el enemigo alcanza un límite
     enemy.update = function() {
-        // Si el enemigo llega al borde izquierdo
+        //si el enemigo llega al borde izquierdo
         if (enemy.x <= minX) {
-            enemy.setVelocityX(speed); // Mover a la derecha
+            enemy.setVelocityX(speed); //mover a la derecha
             enemy.anims.play('enemy', true);
-            enemy.flipX = true; // Ajustar el sprite si es necesario (opcional)
+            enemy.flipX = true;
         }
 
-        // Si el enemigo llega al borde derecho
+        //si el enemigo llega al borde derecho
         if (enemy.x >= maxX) {
-            enemy.setVelocityX(-speed); // Mover a la izquierda
+            enemy.setVelocityX(-speed); //mover a la izquierda
             enemy.anims.play('enemy', true);
-            enemy.flipX = false; // Voltear el sprite horizontalmente (opcional)
+            enemy.flipX = false;
         }
     };
+}
+
+function collectCoin(player, coin) {
+    coin.disableBody(true, true);
+    score += 5;
+    collectedCoins++;
+    displayScore.call(this, 16, 16, score);
+
+    if (collectedCoins === totalCoins && !keyVisible) {
+        keySprite.setVisible(true);
+        keyVisible = true;
+    }
+}
+
+
+function playerHitEnemy(player, enemy) {
+    player.anims.play('death', true);
+    this.physics.pause();
+    
 }

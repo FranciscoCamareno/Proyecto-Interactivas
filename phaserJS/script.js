@@ -12,18 +12,20 @@ var config = { //objeto config, determina las propiedades del juego
         default : 'arcade', //tipo de fisica
         arcade : {
             gravity : {y : 300}, //gravedad
-            debug : false
+            debug : true
         }
     }
 };
 
-var game = new Phaser.Game(config); //se pasan las variables de config al juego
-var score = 0;
-var scoreImages;
-var bounceActive = false;
-var totalCoins = 5; // Set this to the total number of coins in your level
-var collectedCoins = 0;
-var keyVisible = false;
+//variables globales
+let game = new Phaser.Game(config); 
+let score = 0;
+let scoreImages;
+let bounceActive = false;
+let totalCoins = 5; 
+let collectedCoins = 0;
+let keyVisible = false;
+let lastDirection = 'right'; //estado inicial de la dirección
 
 function displayScore(x, y, score) {
     //elimina los dígitos anteriores
@@ -39,8 +41,9 @@ function displayScore(x, y, score) {
 }
 
 
-
-function preload (){    
+function preload (){  
+    
+    let url = 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js'
     const scoreNumbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     scoreNumbers.forEach((num, index) => {
         this.load.image(num, `assets/items/score/score0${index}.png`);
@@ -66,10 +69,12 @@ function preload (){
     this.load.spritesheet('character_death', 'assets/character/character_Death.png', {frameWidth : 32, frameHeight : 32});
     this.load.spritesheet('enemy', 'assets/enemies/enemy_sprite.png', {frameWidth : 24, frameHeight : 24});
     this.load.audio('music', ['assets/audio/powerUp.mp3']);
+    this.load.plugin('rexvirtualjoystickplugin', url, true);
 
 }
 
 function create () {
+
     //background
     this.add.image(400, 300, 'background'); //añade la imagen al canvas en la posición x:400, y:300 
     
@@ -193,6 +198,15 @@ function create () {
     this.physics.add.overlap(player, coins, collectCoin, null, this);
     this.physics.add.overlap(player, key, collectKey, null, this);
 
+    this.joyStick = this.plugins.get('rexvirtualjoystickplugin').add(this, {
+        x: 90,
+        y: 535,
+        radius: 40,
+        base: this.add.circle(0, 0, 40, 0x888888),
+        thumb: this.add.circle(0, 0, 10, 0xcccccc),
+    });
+
+    this.joystickCursors = this.joyStick.createCursorKeys();
     cursor = this.input.keyboard.createCursorKeys();
 
     scoreImages = this.add.group();
@@ -210,18 +224,17 @@ function create () {
     }
 }
 
-
-let lastDirection = 'right'; //estado inicial de la dirección
-
 function update() {
-    if (cursor.left.isDown) {
+    let cursors = this.joystickCursors;
+
+    if (cursor.left.isDown || cursors.left.isDown) {
         player.setVelocityX(-150);
         if (player.body.touching.down) {
             player.anims.play('left', true);
         }
-        lastDirection = 'left'; //actualiza la última dirección
+        lastDirection = 'left';
     } 
-    else if (cursor.right.isDown) {
+    else if (cursor.right.isDown || cursors.right.isDown) {
         player.setVelocityX(150);
         if (player.body.touching.down) {
             player.anims.play('right', true);
@@ -229,7 +242,6 @@ function update() {
         lastDirection = 'right';
     } else {
         player.setVelocityX(0);
-        //reproduce la animación de reposo según la última dirección
         if (player.body.touching.down) {
             if (lastDirection === 'left') {
                 player.anims.play('idle_reverse', true);
@@ -239,8 +251,7 @@ function update() {
         }
     }
 
-    //salto
-    if (cursor.space.isDown && (player.body.touching.down || bounceActive === true)) {
+    if ((cursor.space.isDown || cursors.up.isDown) && (player.body.touching.down || bounceActive === true)) {
         player.setVelocityY(-160);  
         if (lastDirection === 'left') {
             player.anims.play('jump_reverse', true);
@@ -254,7 +265,6 @@ function update() {
         coin.anims.play('coins', true);
     });
     
-    //enemigos
     enemy.anims.play('enemy', true);
     enemy.update();
     
